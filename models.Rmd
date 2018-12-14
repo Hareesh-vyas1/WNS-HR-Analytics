@@ -1,0 +1,288 @@
+---
+title: "models"
+author: "Hareesh"
+date: "2 December 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(caret)
+library(ROCR)
+library(pROC)
+library(rpart)
+library(rpart.plot)
+library(caTools)
+library(randomForest)
+library(ROSE)
+```
+
+```{r}
+tr = read.csv("C:/Users/Administrator/Desktop/project/train.csv")
+te = read.csv("C:/Users/Administrator/Desktop/project/test.csv")
+
+te$is_promoted = NA
+
+df = rbind(tr , te)
+
+levels(df$education)[1] <- "others"
+
+
+df$previous_year_rating[is.na(df$previous_year_rating)]=median(df$previous_year_rating,na.rm = T)
+
+
+df=df[-(which(is.na(df$avg_training_score))),]
+
+
+e = df
+
+e = e %>%select(-(employee_id))
+```
+
+
+## splitting data in to Train and Test
+```{r}
+yes = e%>%filter(is_promoted == 1)  ## filter one's in to "yes" data frame
+no = e%>% filter(is_promoted == 0)  ## filter zero's "into" no dataframe
+
+set.seed(101) 
+sample = sample.split(yes$is_promoted, SplitRatio = .75) ## split data(yes)
+                                                           ## bases on yes - is_promoted
+
+s.train = subset(yes, sample == TRUE)    ## 75 % of one's of yes into s.train
+s.test  = subset(yes, sample == FALSE)   ## 25 % of one's into s.test
+
+sample1 = sample.split(no$is_promoted , SplitRatio = .75) ## split the data(no)
+                                                            ## bases on no - is_promoted
+
+n.train = subset(no ,sample1 == TRUE)    ## 75% of zero's of no into n.train
+n.test = subset(no ,sample1 == FALSE)    ## 25% of zero,s of no into n.test
+
+
+ne.train = rbind(n.train ,s.train)  ## combined both 75% of n.train and s.train and form train data
+ne.test = rbind(n.test , s.test)
+
+```
+### modelling
+
+## logistic regression
+```{r}
+model = glm(is_promoted ~ . , data = ne.train , family = binomial(logit)) ## glm function with binomial                                                                     method acts as logistic regression
+
+
+summary(model)
+
+ne.test$predicted = predict(model , ne.test%>%select(-(is_promoted)),type = "response")
+                                                                                ## predict values
+
+
+ne.test$predicted1 = if_else(ne.test$predicted > 0.5 ,1,0)
+
+confusionMatrix(as.factor(ne.test$predicted1) ,as.factor( ne.test$is_promoted)) ## gives info about                                                                                                     model
+```
+
+
+## roc plot and auc 
+```{r}
+
+## user defined function for roc plot
+rocplot <- function(pred, truth) {
+  predob = prediction(pred, truth)
+  perf = performance(predob, "tpr", "fpr")
+  plot(perf)
+  area <- auc(truth, pred)
+  area <- format(round(area, 4), nsmall = 4)
+  text(x=0.8, y=0.1, labels = paste("AUC =", area))
+  
+  # the reference x=y line
+  segments(x0=0, y0=0, x1=1, y1=1, col="gray", lty=2)
+}
+
+
+pred <- ne.test$predicted1
+truth <- ne.test$is_promoted
+
+rocplot(ne.test$predicted1,ne.test$is_promoted)
+
+```
+
+
+## random forest
+```{r}
+ne.train$is_promoted = as.factor(ne.train$is_promoted)
+ne.test$is_promoted = as.factor(ne.test$is_promoted)
+
+model1 = randomForest(is_promoted ~.,ne.train )  
+
+
+rf_pred<-predict(model1 , ne.test ,type = "prob")
+
+rf_pred = if_else(rf_pred[,2] > 0.1 , 1,0)
+
+rf_pred = as.factor(rf_pred)
+confusionMatrix(rf_pred , ne.test$is_promoted , positive = "1")
+```
+
+## roc plot for random forest
+```{r}
+
+pred1 = as.integer(rf_pred)
+truth1 = as.integer(ne.test$is_promoted)
+rocplot(pred1,truth1)
+```
+
+### decision tree
+```{r}
+
+model2 = rpart(is_promoted~. , ne.train)
+
+dt_pred = predict(model2 , ne.test)
+
+dt_pred = if_else(dt_pred[,2] > dt_pred[,1] , 1 , 0 )
+
+dt_pred = as.factor(dt_pred)
+
+confusionMatrix(dt_pred , ne.test$is_promoted , positive = "1")
+```
+
+## roc plot for Decision tree
+```{r}
+
+pred2 = as.integer(dt_pred)
+truth2 = as.integer(ne.test$is_promoted)
+rocplot(pred2,truth1)
+```
+
+
+
+
+## logistic regreesion
+```{r}
+model_lr = glm(is_promoted ~ . ,data = ne.train, family = "binomial")
+
+pred_lr = predict(model_lr , ne.test)
+
+pred_lr1 = if_else(pred_lr > 0.3 , 1 , 0 )   ## cut-off for 0.3 
+
+pred_lr1 = as.factor(pred_lr1)
+confusionMatrix(pred_lr1 , ne.test$is_promoted , positive = "1")
+
+
+
+```
+
+## over sampling for logistic regression
+```{r}
+over_lr = ovun.sample(is_promoted~ . ,data = ne.train , method = "over" , N = 34138)$data
+
+over_model_lr = glm(is_promoted ~ . , data = over_lr , family = "binomial")
+
+over_model_lr_pred = predict(over_model_lr , ne.test)
+
+over_model_lr_pred = if_else(over_model_lr_pred>0.5,1,0)
+
+over_model_lr_pred = as.factor(over_model_lr_pred)
+
+confusionMatrix(over_model_lr_pred , ne.test$is_promoted,positive = "1")
+
+pred_over = as.numeric(over_model_lr_pred)
+
+rocplot(pred_over,truth)
+```
+## under sampling
+```{r}
+under_lr = ovun.sample(is_promoted~. ,data = ne.train , method = "under" , N = 3142)$data
+
+under_model_lr = glm(is_promoted ~ . ,under_lr , family = "binomial")
+
+under_model_lr_pred = predict(under_model_lr , ne.test)
+
+under_model_lr_pred = if_else(under_model_lr_pred > 0.5 , 1,0)
+
+under_model_lr_pred = as.factor(under_model_lr_pred)
+
+confusionMatrix(under_model_lr_pred , ne.test$is_promoted , positive = "1")
+
+pred_under = as.numeric(under_model_lr_pred)
+
+rocplot(pred,truth)
+```
+## both
+```{r}
+both = ovun.sample(is_promoted ~ . , data = ne.train , method = "both",p = 0.5 , N = nrow(ne.train))$data
+
+both_lr = glm(is_promoted~. , data = both , family = "binomial")
+
+both_lr_pred = predict(both_lr , ne.test)
+
+both_lr_pred = if_else(both_lr_pred > 0.5 , 1 , 0)
+
+both_lr_pred = as.factor(both_lr_pred)
+
+confusionMatrix(both_lr_pred , ne.test$is_promoted , positive = "1")
+
+pred_both = as.numeric(both_lr_pred)
+
+rocplot(pred,truth)
+```
+
+## random forest
+## over sampling
+
+```{r}
+over = ovun.sample(is_promoted~. , data = ne.train , method = "over" , N = 34138)$data
+
+over = randomForest(as.factor(is_promoted) ~ . , data = over)
+over_pred = predict(over,ne.test)
+over_pred = as.factor(over_pred)
+ne.test$is_promoted = as.factor(ne.test$is_promoted)
+confusionMatrix( over_pred, ne.test$is_promoted,positive = "1")
+
+pred = as.numeric(over_pred)
+
+rocplot(pred,truth)
+```
+
+
+
+## under sampling
+
+```{r}
+under=ovun.sample(is_promoted~. ,data = ne.train , method = "under" , N = 3142)$data
+ne.train$is_promoted = as.factor(ne.train$is_promoted)
+under_rf = randomForest(is_promoted ~ . , data = under )
+
+under_pred = predict(under_rf , ne.test)
+
+confusionMatrix(under_pred , ne.test$is_promoted , positive = "1")
+
+pred = as.numeric(under_pred)
+
+rocplot(pred,truth)
+```
+
+## both 
+```{r}
+both = ovun.sample(is_promoted ~ . , data = ne.train , method = "both",p = 0.5 , N = nrow(ne.train))$data
+
+both_rf = randomForest(is_promoted ~ . ,data = both)
+summary(both_rf)
+both_pred = predict(both_rf , ne.test)
+
+confusionMatrix(both_pred,ne.test$is_promoted,positive = "1")
+
+pred = as.numeric(both_pred)
+
+rocplot(pred,truth)
+```
+
+
+
+```{r}
+lr=summary(model)
+
+lr
+```
+

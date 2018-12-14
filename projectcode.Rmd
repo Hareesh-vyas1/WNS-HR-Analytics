@@ -1,0 +1,375 @@
+---
+title: "project"
+author: "Hareesh"
+date: "25 November 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(ggplot2)
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(ROCR)
+library(pROC)
+library(caTools)
+library(ROSE)
+setwd("C:/Users/Administrator/Desktop/project")
+```
+
+
+```{r}
+tr = read.csv("C:/Users/Administrator/Desktop/project/train.csv")
+te = read.csv("C:/Users/Administrator/Desktop/project/test.csv")
+
+te$is_promoted = NA  ## adding is_promoted column with NA values
+
+df = rbind(tr , te) ## combined two datasets for EDA
+```
+
+## dim
+```{r}
+dim(df)  ## gives number of rows and columns
+```
+
+
+## structure of data
+```{r}
+str(df) ## shows the type of data
+```
+
+## summary of the data
+```{r}
+summary(df) ## gives the data distribution
+```
+
+
+## missing values
+```{r}
+colSums(is.na(df))
+## previous_year_rating has missing values of 3705
+```
+
+
+
+```{r}
+length(unique(df$employee_id))  ## number of unique records
+```
+
+## Univariate Analysis
+
+## Department
+```{r}
+
+plot(df$department)
+```
+
+## region
+```{r}
+plot(df$region)
+```
+## education
+```{r}
+plot(df$education)
+
+```
+## gender
+```{r}
+plot(df$gender)
+```
+
+## recruitment channel
+```{r}
+plot(df$recruitment_channel)
+```
+
+## no.of trainings
+```{r}
+
+plot(as.factor(df$no_of_trainings))
+```
+
+## age distribution
+```{r}
+hist(df$age)
+```
+
+## previous year rating
+```{r}
+
+plot(as.factor(df$previous_year_rating))
+```
+
+
+## length of service
+
+```{r}
+plot(as.factor(df$length_of_service))
+```
+
+
+```{r}
+plot(as.factor(df$awards_won.))
+```
+
+## is_promoted
+```{r}
+df$is_promoted = as.factor(df$is_promoted)
+plot(df$is_promoted)
+```
+
+## bivariate analysis
+
+## department vs is_promoted(==1)
+```{r}
+
+dept=tr%>%group_by(department)%>%summarise(freq = n())
+
+tr %>%filter(is_promoted == 1)%>%group_by(department)%>%summarise(count = n())%>%arrange(desc(count))%>%left_join(dept) %>%mutate(per_conversion = round(count/freq,2)) %>% arrange(desc(per_conversion)) %>% ggplot(aes(x = reorder(department,-per_conversion),y = per_conversion,fill = department)) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90),axis.title = element_blank(),axis.text.y = element_blank(),axis.ticks = element_blank()) + guides(fill = F) + geom_text(aes(label = paste0(per_conversion*100,"%")),position = position_stack(vjust = 0.5)) + labs(title = "Dept")
+
+
+tr %>%filter(is_promoted == 1)%>%group_by(department)%>%summarise(count = n())%>%arrange(desc(count))%>%left_join(dept) %>%mutate(per_conversion = round(count/freq,2)) %>% arrange(desc(per_conversion))
+```
+
+
+## region vs is_promoted(==1)
+```{r}
+region=tr%>%group_by(region)%>%summarise(freq = n())
+
+tr %>%filter(is_promoted == 1)%>%group_by(region)%>%summarise(count = n())%>%left_join(region) %>%mutate(per_conversion = round(count/freq,2)) %>% arrange(desc(per_conversion))%>%ggplot(aes(x = reorder(region,-per_conversion),y = per_conversion,fill = region)) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90),axis.title = element_blank(),axis.text.y = element_blank(),axis.ticks = element_blank()) + guides(fill = F) + geom_text(aes(label = paste0(per_conversion*100,"%")),position = position_stack(vjust = 0.5)) + labs(title = "region")
+
+
+tr %>%filter(is_promoted == 1)%>%group_by(region)%>%summarise(count = n())%>%left_join(region) %>%mutate(per_conversion = round(count/freq,2)) %>% arrange(desc(per_conversion))
+```
+
+
+## education vs is_promoted(==1)
+```{r}
+education=tr%>%group_by(education)%>%summarise(freq = n())
+
+levels(tr$education)[1] <- "others"
+
+tr %>%filter(is_promoted == 1)%>%group_by(education)%>%summarise(count = n())%>%left_join(education) %>%mutate(per_conversion = round(count/freq,2)) %>% arrange(desc(per_conversion))%>%ggplot(aes(x = reorder(education,-per_conversion),y = per_conversion,fill = education)) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90),axis.title = element_blank(),axis.text.y = element_blank(),axis.ticks = element_blank()) + guides(fill = F) + geom_text(aes(label = paste0(per_conversion*100,"%")),position = position_stack(vjust = 0.5)) + labs(title = "education")
+
+
+tr %>%filter(is_promoted == 1)%>%group_by(education)%>%summarise(count = n())%>%left_join(education) %>%mutate(per_conversion = round(count/freq,2)) %>% arrange(desc(per_conversion))
+```
+
+## gender vs is_promoted(==1)
+
+```{r}
+gender=tr%>%group_by(gender)%>%summarise(freq = n())
+
+tr %>%filter(is_promoted == 1)%>%group_by(gender)%>%summarise(count = n())%>%left_join(gender) %>%mutate(per_conversion = round(count/freq,2)) %>% arrange(desc(per_conversion))%>%ggplot(aes(x = reorder(gender,-per_conversion),y = per_conversion,fill = gender)) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90),axis.title = element_blank(),axis.text.y = element_blank(),axis.ticks = element_blank()) + guides(fill = F) + geom_text(aes(label = paste0(per_conversion*100,"%")),position = position_stack(vjust = 0.5)) + labs(title = "gender")
+
+
+tr %>%filter(is_promoted == 1)%>%group_by(gender)%>%summarise(count = n())%>%left_join(gender) %>%mutate(per_conversion = round(count/freq,2)) %>% arrange(desc(per_conversion))
+```
+
+## recruitment channel vs is_promoted(==1)
+
+```{r}
+
+recruitment_channel=tr%>%group_by(recruitment_channel)%>%summarise(freq = n())
+
+tr %>%filter(is_promoted == 1)%>%group_by(recruitment_channel)%>%summarise(count = n())%>%left_join(recruitment_channel) %>%mutate(per_conversion = round(count/freq,2)) %>% arrange(desc(per_conversion))%>%ggplot(aes(x = reorder(recruitment_channel,-per_conversion),y = per_conversion,fill = recruitment_channel)) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90),axis.title = element_blank(),axis.text.y = element_blank(),axis.ticks = element_blank()) + guides(fill = F) + geom_text(aes(label = paste0(per_conversion*100,"%")),position = position_stack(vjust = 0.5)) + labs(title = "recruitment_channel")
+
+tr %>%filter(is_promoted == 1)%>%group_by(recruitment_channel)%>%summarise(count = n())%>%left_join(recruitment_channel) %>%mutate(per_conversion = round(count/freq,2)) %>% arrange(desc(per_conversion))
+```
+
+
+## no_oftrainings vs is_promoted(==1)
+
+```{r}
+no_of_trainings=tr%>%group_by(no_of_trainings)%>%summarise(freq = n())
+
+tr %>%filter(is_promoted == 1)%>%group_by(no_of_trainings)%>%summarise(count = n())%>%left_join(no_of_trainings) %>%mutate(per_conversion = round(count/freq,2)) %>% arrange(desc(per_conversion))%>%ggplot(aes(x = reorder(no_of_trainings,-per_conversion),y = per_conversion,fill = no_of_trainings)) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90),axis.title = element_blank(),axis.text.y = element_blank(),axis.ticks = element_blank()) + guides(fill = F) + geom_text(aes(label = paste0(per_conversion*100,"%")),position = position_stack(vjust = 0.5)) + labs(title = "no_of_trainings")
+
+tr %>%filter(is_promoted == 1)%>%group_by(no_of_trainings)%>%summarise(count = n())%>%left_join(no_of_trainings) %>%mutate(per_conversion = round(count/freq,2)) %>% arrange(desc(per_conversion))
+```
+
+## awards won vs is_promoted(==1)
+
+```{r}
+awards_won.=tr%>%group_by(awards_won.)%>%summarise(freq = n())
+
+tr %>%filter(is_promoted == 1)%>%group_by(awards_won.)%>%summarise(count = n())%>%left_join(awards_won.) %>%mutate(per_conversion = round(count/freq,2)) %>% arrange(desc(per_conversion))%>%ggplot(aes(x = reorder(awards_won.,-per_conversion),y = per_conversion,fill = awards_won.)) + geom_bar(stat = "identity") + theme(axis.text.x = element_text(angle = 90),axis.title = element_blank(),axis.text.y = element_blank(),axis.ticks = element_blank()) + guides(fill = F) + geom_text(aes(label = paste0(per_conversion*100,"%")),position = position_stack(vjust = 0.5)) + labs(title = "awards_won.")
+
+tr %>%filter(is_promoted == 1)%>%group_by(awards_won.)%>%summarise(count = n())%>%left_join(awards_won.) %>%mutate(per_conversion = round(count/freq,2)) %>% arrange(desc(per_conversion))
+```
+
+## avg_training score vs is_promoted(==1)
+
+```{r}
+mean(tr$avg_training_score,na.rm = T)
+tr %>%filter(is_promoted == 1) %>%summarise( Avg_score=mean(avg_training_score))
+
+
+tr %>%filter(is_promoted == 1) %>%summarise( minimum_score=min(avg_training_score))
+## mi9nimum score required to promoted
+```
+
+### missing value treatment
+```{r}
+# Education has 2290 missing values
+#previous_year_rating has a missing values of 3705
+
+levels(df$education)[1] <- "others"   ## imputed missing values with others
+
+
+df$previous_year_rating[is.na(df$previous_year_rating)]=median(df$previous_year_rating,na.rm = T)
+                                        ## impute missing value with median
+
+df=df[-(which(is.na(df$avg_training_score))),]
+                                      ## 1 missing value in avg training score and removed that row
+
+
+
+```
+
+
+```{r}
+colSums(is.na(df))
+
+```
+
+
+
+### model building
+
+## splitting in to train and test
+```{r}
+
+valid.df = df[is.na(df$is_promoted),]
+dataset = df[!(is.na(df$is_promoted)), ]
+data_part <- createDataPartition(dataset$is_promoted, 
+                                 p = 0.7, list = F)
+test <- dataset[-(data_part),] # 30% data goes here
+train <- dataset[data_part,] # 70% here
+
+table(train$is_promoted)
+```
+
+
+## logistic regression
+```{r}
+lg.model = glm((is_promoted) ~ .,data =train%>%select(-(employee_id)) , family = binomial)
+
+summary(lg.model)
+
+lg.predict = predict(lg.model , test%>%select(-c(is_promoted,employee_id)), type = "response")
+
+
+lg.predict = if_else(lg.predict > 0.5 ,1,0)
+
+
+
+```
+
+```{r}
+a <- factor(test$is_promoted)
+b <- factor(lg.predict)
+caret::confusionMatrix(b , a)
+
+
+```
+
+
+
+
+## roc curve
+```{r}
+rocplot <- function(pred, truth, ...) {
+  predob = prediction(pred, truth)
+  perf = performance(predob, "tpr", "fpr")
+  plot(perf, ...)
+  area <- auc(truth, pred)
+  area <- format(round(area, 4), nsmall = 4)
+  text(x=0.8, y=0.1, labels = paste("AUC =", area))
+
+  # the reference x=y line
+  segments(x0=0, y0=0, x1=1, y1=1, col="gray", lty=2)
+}
+
+rocplot(lg.predict,as.factor(test$is_promoted))
+```
+
+
+
+## decision tree
+```{r}
+
+
+decision.model = rpart(as.factor(is_promoted) ~ . ,data = train)
+
+
+rpart.plot(decision.model , box.col = c("red","blue"))
+
+
+pr = predict (decision.model, test )
+
+tree.predict  = if_else(pr[,2] > pr[,1] , 1 , 0)
+tree.predict = as.factor(tree.predict)
+
+View(pr)
+```
+
+
+```{r}
+confusionMatrix(tree.predict,a)
+```
+
+
+## roc curve and auc
+```{r}
+
+x= as.numeric(tree.predict)
+y= as.numeric(test$is_promoted)
+rocplot(x,y)
+```
+
+
+```{r}
+
+rf.model = randomForest(as.factor(is_promoted) ~ .  , data = train)
+
+
+rf.predict  = predict(rf.model , test , type = "prob")
+
+rf.predict = as.data.frame(rf.predict)
+
+rf.predict$pred = if_else(rf.predict$`0`  > rf.predict$`1` , 0 ,1)
+
+
+
+caret::confusionMatrix(as.factor(rf.predict$pred),as.factor(test$is_promoted),positive ="1" )
+
+
+```
+
+
+```{r}
+x= as.numeric(rf.predict$pred)
+rocplot(x,y)
+```
+
+
+## logistic regreesion
+```{r}
+MLmetrics::F1_Score(test$is_promoted , lg.predict)
+
+```
+ 
+
+## random forest
+```{r}
+MLmetrics::F1_Score(test$is_promoted ,rf.predict$pred )
+```
+
+
